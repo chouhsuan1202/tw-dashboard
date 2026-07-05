@@ -32,21 +32,22 @@ def fetch_stock_data(symbol, token=None):
     if token:
         url += f"&token={token}"
 
-    for attempt in range(3):
+    backoffs = [10, 30, 60, 90]
+    for attempt in range(5):
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=30)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 200 and data.get('msg') == 'success':
                     return data.get('data', [])
-            print(f"Warning: Symbol {symbol} attempt {attempt + 1}/3 returned status {response.status_code}", file=sys.stderr)
+            print(f"Warning: Symbol {symbol} attempt {attempt + 1}/5 returned status {response.status_code}", file=sys.stderr)
         except requests.exceptions.RequestException as e:
-            print(f"Warning: Symbol {symbol} attempt {attempt + 1}/3 failed: {e}", file=sys.stderr)
+            print(f"Warning: Symbol {symbol} attempt {attempt + 1}/5 failed: {e}", file=sys.stderr)
 
-        if attempt < 2:
-            time.sleep(5)
+        if attempt < 4:
+            time.sleep(backoffs[attempt])
 
-    print(f"Warning: Failed to fetch data for symbol {symbol} after 3 retries", file=sys.stderr)
+    print(f"Warning: Failed to fetch data for symbol {symbol} after 5 retries", file=sys.stderr)
     return None
 
 
@@ -54,6 +55,18 @@ def build_data_json():
     """Main function to fetch all symbols and build data.json"""
     symbols = ["TAIEX", "2330", "0050", "0056", "006208", "00646"]
     token = os.environ.get('FINMIND_TOKEN')
+
+    script_dir = Path(__file__).parent
+    output_path = script_dir / "data.json"
+
+    # Keep previously fetched data as fallback for symbols that fail this run
+    previous = {}
+    if output_path.exists():
+        try:
+            with open(output_path, encoding='utf-8') as f:
+                previous = json.load(f).get("stocks", {})
+        except (json.JSONDecodeError, OSError):
+            previous = {}
 
     output = {
         "_updated": datetime.utcnow().isoformat() + "Z",
@@ -65,7 +78,11 @@ def build_data_json():
         records = fetch_stock_data(symbol, token)
 
         if records is None:
-            print(f"Skipping {symbol} due to fetch failure", file=sys.stderr)
+            if symbol in previous:
+                output["stocks"][symbol] = previous[symbol]
+                print(f"  -> kept previous data for {symbol}", file=sys.stderr)
+            else:
+                print(f"Skipping {symbol} due to fetch failure", file=sys.stderr)
         else:
             # Sort by date (ascending) and extract dates and closes
             records.sort(key=lambda x: x.get('date', ''))
@@ -93,11 +110,7 @@ def build_data_json():
                 print(f"  -> {len(dates)} records for {symbol}")
 
         # Be polite to the API
-        time.sleep(1)
-
-    # Write data.json
-    script_dir = Path(__file__).parent
-    output_path = script_dir / "data.json"
+        time.sleep(5)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
