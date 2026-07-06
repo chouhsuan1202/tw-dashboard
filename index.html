@@ -235,6 +235,12 @@
     .range-pill:hover {
       color: #1f2937;
     }
+    .pill-divider {
+      width: 1px;
+      align-self: stretch;
+      background: #e5e7eb;
+      margin: 0 4px;
+    }
     .ma-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -307,7 +313,7 @@
       <div class="error-message">加載中...</div>
     </div>
 
-    <footer>資料僅供參考,非投資建議。</footer>
+    <footer>資料僅供參考,非投資建議。<div style="margin-top:6px;">Created by Hsuan x her AI bestie</div></footer>
   </div>
 
   <script>
@@ -547,14 +553,28 @@
       return v.toLocaleString('zh-Hant', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    function renderChartBlock(id, days) {
-      const closes = globalData.stocks[id]?.close || [];
-      if (closes.length === 0) return '';
-      const start = days >= 999 ? 0 : Math.max(0, closes.length - days);
-      const sliced = closes.slice(start);
+    function weeklyCloses(dates, closes) {
+      const out = [];
+      for (let i = 0; i < closes.length; i++) {
+        const isLast = i === closes.length - 1;
+        if (isLast) { out.push(closes[i]); break; }
+        const cur = new Date(dates[i]).getDay();
+        const nxt = new Date(dates[i + 1]).getDay();
+        if (nxt <= cur) out.push(closes[i]);
+      }
+      return out;
+    }
+
+    function renderChartBlock(id, days, weekly) {
+      const stock = globalData.stocks[id];
+      if (!stock || stock.close.length === 0) return '';
+      const start = days >= 999 ? 0 : Math.max(0, stock.close.length - days);
+      let sliced = stock.close.slice(start);
+      if (weekly) sliced = weeklyCloses(stock.dates.slice(start), sliced);
+      if (sliced.length < 2) sliced = stock.close.slice(-2);
       const minPrice = Math.min(...sliced);
       const maxPrice = Math.max(...sliced);
-      return `<div class="chart-wrap">${renderChart(closes, 320, 110, start)}<span class="chart-label max">${fmtPrice(maxPrice, id)}</span><span class="chart-label min">${fmtPrice(minPrice, id)}</span></div>`;
+      return `<div class="chart-wrap">${renderChart(sliced, 320, 110, 0)}<span class="chart-label max">${fmtPrice(maxPrice, id)}</span><span class="chart-label min">${fmtPrice(minPrice, id)}</span></div>`;
     }
 
     function renderStockCard(sym, analysis) {
@@ -608,14 +628,17 @@
             </div>
           </div>
           <div class="card-body">
-            <div class="chart-container" data-symbol="${sym.id}">
-              ${renderChartBlock(sym.id, 63)}
+            <div class="chart-container" data-symbol="${sym.id}" data-days="63" data-mode="d">
+              ${renderChartBlock(sym.id, 63, false)}
             </div>
             <div class="range-pills">
-              <button class="range-pill active" data-range="0" data-days="63">3月</button>
-              <button class="range-pill" data-range="1" data-days="126">6月</button>
-              <button class="range-pill" data-range="2" data-days="245">1年</button>
-              <button class="range-pill" data-range="3" data-days="999">全部</button>
+              <button class="range-pill active" data-days="63">3月</button>
+              <button class="range-pill" data-days="126">6月</button>
+              <button class="range-pill" data-days="245">1年</button>
+              <button class="range-pill" data-days="999">全部</button>
+              <span class="pill-divider"></span>
+              <button class="range-pill mode-pill active" data-mode="d">日線</button>
+              <button class="range-pill mode-pill" data-mode="w">週線</button>
             </div>
             ${maHtml}
             <div class="card-note">↳ ${interpretation} ${analysis.score}/${analysis.valid}</div>
@@ -663,12 +686,18 @@
       document.querySelectorAll('.range-pill').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const card = e.target.closest('.stock-card');
-          const symbol = card.querySelector('.chart-container').dataset.symbol;
-          const rangeDays = parseInt(e.target.dataset.days);
+          const cc = card.querySelector('.chart-container');
 
-          card.querySelector('.chart-container').innerHTML = renderChartBlock(symbol, rangeDays);
-          card.querySelectorAll('.range-pill').forEach(p => p.classList.remove('active'));
+          if (e.target.dataset.mode) {
+            cc.dataset.mode = e.target.dataset.mode;
+            card.querySelectorAll('.mode-pill').forEach(p => p.classList.remove('active'));
+          } else {
+            cc.dataset.days = e.target.dataset.days;
+            card.querySelectorAll('.range-pill:not(.mode-pill)').forEach(p => p.classList.remove('active'));
+          }
           e.target.classList.add('active');
+
+          cc.innerHTML = renderChartBlock(cc.dataset.symbol, parseInt(cc.dataset.days), cc.dataset.mode === 'w');
         });
       });
     }
