@@ -132,6 +132,25 @@
     .taiex-card {
       grid-column: 1 / -1;
     }
+    .taiex-card .card-header {
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .taiex-card.open .card-header {
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .chev {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-left: 6px;
+    }
+    .taiex-card .card-body { display: none; }
+    .taiex-card.open .card-body { display: block; }
     .card-header {
       display: flex;
       justify-content: space-between;
@@ -581,24 +600,26 @@
           <div class="card-header">
             <div>
               <div class="card-title">${title}</div>
-              <div class="card-code">${code}</div>
+              <div class="card-code">${code}${isTaiex ? ' <span class="chev">▸ 點開看線圖</span>' : ''}</div>
             </div>
             <div class="card-price-section">
               <div class="card-price">${priceStr}</div>
               <div class="price-change ${priceClass}">${priceSign}${analysis.dayChange.toFixed(2)}%</div>
             </div>
           </div>
-          <div class="chart-container" data-symbol="${sym.id}">
-            ${renderChartBlock(sym.id, 63)}
+          <div class="card-body">
+            <div class="chart-container" data-symbol="${sym.id}">
+              ${renderChartBlock(sym.id, 63)}
+            </div>
+            <div class="range-pills">
+              <button class="range-pill active" data-range="0" data-days="63">3月</button>
+              <button class="range-pill" data-range="1" data-days="126">6月</button>
+              <button class="range-pill" data-range="2" data-days="245">1年</button>
+              <button class="range-pill" data-range="3" data-days="999">全部</button>
+            </div>
+            ${maHtml}
+            <div class="card-note">↳ ${interpretation} ${analysis.score}/${analysis.valid}</div>
           </div>
-          <div class="range-pills">
-            <button class="range-pill active" data-range="0" data-days="63">3月</button>
-            <button class="range-pill" data-range="1" data-days="126">6月</button>
-            <button class="range-pill" data-range="2" data-days="245">1年</button>
-            <button class="range-pill" data-range="3" data-days="999">全部</button>
-          </div>
-          ${maHtml}
-          <div class="card-note">↳ ${interpretation} ${analysis.score}/${analysis.valid}</div>
         </div>
       `;
     }
@@ -627,6 +648,16 @@
       html += '</div>';
 
       document.getElementById('content').innerHTML = html;
+
+      // TAIEX collapse toggle
+      const taiexCard = document.querySelector('.taiex-card');
+      if (taiexCard) {
+        taiexCard.querySelector('.card-header').addEventListener('click', () => {
+          taiexCard.classList.toggle('open');
+          const chev = taiexCard.querySelector('.chev');
+          if (chev) chev.textContent = taiexCard.classList.contains('open') ? '▾ 收合' : '▸ 點開看線圖';
+        });
+      }
 
       // Attach event listeners
       document.querySelectorAll('.range-pill').forEach(btn => {
